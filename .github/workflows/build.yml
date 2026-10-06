@@ -12,10 +12,12 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     env:
       CONFIGURATION: Release
+      PLATFORM: Any CPU
+      TARGET_FRAMEWORK_VERSION: v4.8
 
     steps:
       - name: Checkout
@@ -25,15 +27,28 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Build solution
-        run: msbuild SharpDPAPI.sln /t:Build /p:Configuration=%CONFIGURATION% /p:Platform="Any CPU" /m
-        shell: cmd
+        shell: pwsh
+        run: |
+          msbuild SharpDPAPI.sln `
+            /restore `
+            /t:Build `
+            /m `
+            /p:Configuration="$env:CONFIGURATION" `
+            /p:Platform="$env:PLATFORM" `
+            /p:TargetFrameworkVersion="$env:TARGET_FRAMEWORK_VERSION"
 
       - name: Stage artifacts
+        shell: pwsh
         run: |
-          mkdir dist
-          copy "SharpDPAPI\bin\%CONFIGURATION%\SharpDPAPI.exe" dist\
-          copy "SharpChrome\bin\%CONFIGURATION%\SharpChrome.exe" dist\
-        shell: cmd
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($name in 'SharpDPAPI', 'SharpChrome') {
+            $exe = "$name\bin\$env:CONFIGURATION\$name.exe"
+            if (-not (Test-Path $exe)) {
+              throw "Expected build output was not found: $exe"
+            }
+            Get-Item $exe | Format-List FullName, Length, LastWriteTime
+            Copy-Item $exe dist\
+          }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
