@@ -17,7 +17,6 @@ jobs:
     env:
       CONFIGURATION: Release
       PLATFORM: Any CPU
-      TARGET_FRAMEWORK_VERSION: v4.8
 
     steps:
       - name: Checkout
@@ -26,28 +25,40 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build solution
+      - name: Build solution (net35 + net48)
         shell: pwsh
         run: |
-          msbuild SharpDPAPI.sln `
-            /restore `
-            /t:Build `
-            /m `
-            /p:Configuration="$env:CONFIGURATION" `
-            /p:Platform="$env:PLATFORM" `
-            /p:TargetFrameworkVersion="$env:TARGET_FRAMEWORK_VERSION"
+          $targets = @(
+            @{ Framework = 'v3.5'; Out = 'net35' },
+            @{ Framework = 'v4.8'; Out = 'net48' }
+          )
+          foreach ($t in $targets) {
+            Write-Host "::group::Build $($t.Framework)"
+            msbuild SharpDPAPI.sln `
+              /restore `
+              /t:Rebuild `
+              /m `
+              /p:Configuration="$env:CONFIGURATION" `
+              /p:Platform="$env:PLATFORM" `
+              /p:TargetFrameworkVersion="$($t.Framework)" `
+              /p:OutputPath="bin\$($t.Out)\"
+            if ($LASTEXITCODE -ne 0) { throw "Build failed for $($t.Framework)" }
+            Write-Host "::endgroup::"
+          }
 
       - name: Stage artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          foreach ($name in 'SharpDPAPI', 'SharpChrome') {
-            $exe = "$name\bin\$env:CONFIGURATION\$name.exe"
-            if (-not (Test-Path $exe)) {
-              throw "Expected build output was not found: $exe"
+          foreach ($out in 'net35', 'net48') {
+            foreach ($name in 'SharpDPAPI', 'SharpChrome') {
+              $exe = "$name\bin\$out\$name.exe"
+              if (-not (Test-Path $exe)) {
+                throw "Expected build output was not found: $exe"
+              }
+              Get-Item $exe | Format-List FullName, Length, LastWriteTime
+              Copy-Item $exe "dist\${name}_$out.exe"
             }
-            Get-Item $exe | Format-List FullName, Length, LastWriteTime
-            Copy-Item $exe dist\
           }
 
       - name: Upload build artifacts
