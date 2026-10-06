@@ -45,8 +45,8 @@ jobs:
       - name: Compute short SHA
         if: github.ref == 'refs/heads/master'
         id: sha
-        run: echo "short=$("${GITHUB_SHA}".Substring(0,7))" >> $env:GITHUB_OUTPUT
-        shell: pwsh
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        shell: bash
 
       - name: Publish release
         if: github.ref == 'refs/heads/master'
